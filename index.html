@@ -79,6 +79,21 @@
 
   /* ---------- Dashboard ---------- */
   #dashboard{display:none;}
+  #kpi-section-head{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+  #kpi-mini-summary{display:none;font-size:12px;color:var(--text-muted);}
+  #kpi-section-head.collapsed #kpi-mini-summary{display:inline;}
+  #kpi-mini-summary b{color:var(--ink);font-weight:700;}
+  #kpi-mini-summary .mini-vencido{color:var(--red);font-weight:700;}
+  #kpi-mini-summary .mini-porvencer{color:var(--green);font-weight:700;}
+  #kpi-toggle{
+    display:inline-flex;align-items:center;gap:5px;cursor:pointer;
+    font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--text-muted);padding:2px 0;
+  }
+  #kpi-toggle:hover{color:var(--ink);}
+  #kpi-toggle-icon{transition:transform .18s ease;}
+  #kpi-section-head.collapsed #kpi-toggle-icon{transform:rotate(-90deg);}
+  #kpi-section-body.collapsed{display:none;}
   .summary-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;}
   .kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;}
   .kpi .label{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);font-weight:700;margin-bottom:6px;}
@@ -297,12 +312,13 @@
     font-size:11px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;
     border-bottom:2px solid var(--ink);
   }
-  table.clients thead th.num, table.clients td.num{text-align:right;}
+  table.clients thead th.num, table.clients td.num{text-align:right;white-space:nowrap;}
   table.clients tbody tr{border-bottom:1px solid var(--border);cursor:pointer;}
   table.clients tbody tr:last-child{border-bottom:none;}
   table.clients tbody tr:hover{background:#f8fafc;}
   table.clients td{padding:12px 14px;vertical-align:middle;}
   table.clients td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  table.clients td.td-cupo, table.clients th#th-cupo{text-align:center;}
   .cliente-name{font-weight:600;}
   .cliente-cc{color:var(--text-muted);font-size:12px;}
   .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;}
@@ -380,6 +396,14 @@
   </div>
 
   <div id="dashboard">
+    <div id="kpi-section-head">
+      <span id="kpi-toggle" title="Ocultar/mostrar indicadores">
+        <svg id="kpi-toggle-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        Indicadores
+      </span>
+      <span id="kpi-mini-summary"></span>
+    </div>
+    <div id="kpi-section-body">
     <div class="summary-row">
       <div class="kpi total kpi-clickable" id="kpi-card-total" title="Ver toda la cartera"><div class="label">Saldo total cartera</div><div class="value" id="kpi-total">$ 0</div></div>
       <div class="kpi vencido kpi-clickable" id="kpi-card-vencido" title="Ver solo lo vencido"><div class="label">Vencido</div><div class="value" id="kpi-vencido">$ 0</div><div class="kpi-pct" id="kpi-vencido-pct"></div></div>
@@ -414,6 +438,7 @@
         <div class="value" id="stat-vendedor-riesgo">—</div>
         <div class="value-sub" id="stat-vendedor-riesgo-sub"></div>
       </div>
+    </div>
     </div>
 
     <div id="aging-card">
@@ -494,6 +519,13 @@
           </div>
         </div>
       </div>
+      <div class="filter-group" id="filter-group-cupo" style="display:none;">
+        <div class="filter-group-label">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Cupo
+        </div>
+        <div class="filter-group-body"><button class="chip" id="filter-cupo-superado">Cupo superado</button></div>
+      </div>
     </div>
 
     <div class="toolbar">
@@ -510,6 +542,7 @@
             <th class="num">Vencido</th>
             <th class="num">Por vencer</th>
             <th class="num">Total</th>
+            <th class="num" id="th-cupo" style="display:none;">Cupo aprobado</th>
             <th></th>
           </tr>
         </thead>
@@ -549,6 +582,8 @@ const LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAApIAAAJWCAY
   let quickFilterSemana = false;   // "vence esta semana" — no se puede representar con buckets de 30 días
   let quickFilterAlDia = false;    // "clientes al día" — se aplica después de agrupar por cliente
   let quickFilterConcentracion = false; // "concentración (top 10)" — igual, después de agrupar
+  let quickFilterSobreCupo = false; // "cupo superado" — cliente con saldo total > cupo aprobado
+  let cupoColumnDetected = false;
 
   // ---------------------------------------------------------------------
   // Utilidades de formato (deterministas, sin IA)
@@ -569,6 +604,25 @@ const LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAApIAAAJWCAY
       if (c % 3 === 0 && i !== 0) out = "." + out;
     }
     return (neg ? "-$ " : "$ ") + out;
+  }
+
+  // Formato compacto para cifras grandes en espacios chiquitos (ej. $60M en
+  // vez de $60.000.000) — se usa en la columna de Cupo aprobado.
+  function fmtMoneyCompact(n) {
+    if (n === null || n === undefined || isNaN(n)) return "$ 0";
+    const neg = n < 0;
+    const abs = Math.abs(n);
+    let out;
+    if (abs >= 1000000) {
+      const m = abs / 1000000;
+      out = (Number.isInteger(m) ? m.toFixed(0) : m.toFixed(1).replace(".0", "")) + "M";
+    } else if (abs >= 1000) {
+      const k = abs / 1000;
+      out = (Number.isInteger(k) ? k.toFixed(0) : k.toFixed(1).replace(".0", "")) + "K";
+    } else {
+      return fmtMoney(n);
+    }
+    return (neg ? "-$" : "$") + out;
   }
 
   function fmtDate(d) {
@@ -710,6 +764,7 @@ const LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAApIAAAJWCAY
     dias: (h) => h.includes("DIA") && !h.includes("MAYOR"),
     semaforo: (h) => h === "SEMAFORO",
     telefono: (h) => h.includes("TELEFONO") || h.includes("TELÉFONO") || h.includes("CELULAR"),
+    cupo: (h) => h === "CUPO" || h.includes("CUPO APROBADO"),
   };
 
   function findHeaderRow(rows) {
@@ -775,8 +830,10 @@ const LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAApIAAAJWCAY
         dias: Math.round(parseNumberCell(get(row, "dias"))),
         semaforo: normalizeName(get(row, "semaforo")),
         telefono: normalizeName(get(row, "telefono")),
+        cupo: colMap.cupo !== undefined ? parseNumberCell(get(row, "cupo")) : null,
       });
     }
+    records.hasCupoColumn = colMap.cupo !== undefined;
     return records;
   }
 
@@ -832,12 +889,13 @@ const LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAApIAAAJWCAY
     for (const r of records) {
       const key = r.cc || r.cliente;
       if (!map.has(key)) {
-        map.set(key, { cc: r.cc, cliente: r.cliente, movimientos: [], total: 0, vencido: 0, porVencer: 0 });
+        map.set(key, { cc: r.cc, cliente: r.cliente, movimientos: [], total: 0, vencido: 0, porVencer: 0, cupo: null });
       }
       const c = map.get(key);
       c.movimientos.push(r);
       c.total += r.saldo;
       if (r.dias > 0) c.vencido += r.saldo; else c.porVencer += r.saldo;
+      if (c.cupo === null && r.cupo !== null && r.cupo !== undefined) c.cupo = r.cupo; // cupo único por cliente, no se suma
     }
     const arr = Array.from(map.values());
     arr.sort((a, b) => b.total - a.total);
@@ -863,6 +921,8 @@ const LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAApIAAAJWCAY
       total !== 0 ? `${Math.round((vencido / base) * 100)}% del total` : "";
     document.getElementById("kpi-porvencer-pct").textContent =
       total !== 0 ? `${Math.round((porVencer / base) * 100)}% del total` : "";
+    document.getElementById("kpi-mini-summary").innerHTML =
+      `Saldo <b>${fmtMoney(total)}</b> · Vencido <span class="mini-vencido">${fmtMoney(vencido)}</span> · Por vencer <span class="mini-porvencer">${fmtMoney(porVencer)}</span> · ${clientList.length} clientes`;
 
     // ---- Tarjetas de estadística nuevas ----
     const vencidas = filteredRecords.filter((r) => r.dias > 0);
@@ -1215,6 +1275,7 @@ const LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAApIAAAJWCAY
       quickFilterSemana ||
       quickFilterAlDia ||
       quickFilterConcentracion ||
+      quickFilterSobreCupo ||
       normalizeName(document.getElementById("search").value) !== "";
     document.getElementById("filters-clear").style.display = anyActive ? "inline-flex" : "none";
   }
@@ -1228,6 +1289,8 @@ const LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAApIAAAJWCAY
     quickFilterSemana = false;
     quickFilterAlDia = false;
     quickFilterConcentracion = false;
+    quickFilterSobreCupo = false;
+    document.getElementById("filter-cupo-superado").classList.remove("active");
     document.getElementById("search").value = "";
     document.getElementById("client-search-input").value = "";
     refreshAllFilters();
@@ -1249,6 +1312,7 @@ const LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAApIAAAJWCAY
       );
       list = list.filter((c) => top10Keys.has(c.cc || c.cliente));
     }
+    if (quickFilterSobreCupo) list = list.filter((c) => c.cupo !== null && c.cupo > 0 && c.total > c.cupo);
     clients = list;
     renderSummary(filtered, clients, fullClients);
     renderAging(applyFilters(rawRecords, { skipAging: true }));
@@ -1268,12 +1332,21 @@ const LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAApIAAAJWCAY
       const key = c.cc || c.cliente;
       const tr = document.createElement("tr");
       tr.className = "summary-row-client" + (openRows.has(key) ? " open" : "");
+      const sobreCupo = c.cupo !== null && c.cupo > 0 && c.total > c.cupo;
+      const cupoCellHtml = !cupoColumnDetected ? "" : `<td class="num td-cupo">${
+        c.cupo === null
+          ? "&mdash;"
+          : sobreCupo
+            ? `<span class="pill red" title="El saldo total (${fmtMoney(c.total)}) supera el cupo aprobado">⚠ ${fmtMoneyCompact(c.cupo)}</span>`
+            : fmtMoneyCompact(c.cupo)
+      }</td>`;
       tr.innerHTML = `
         <td><span class="chev">&#9656;</span><span class="cliente-name">${escapeHtml(c.cliente)}</span><br><span class="cliente-cc">NIT: ${escapeHtml(c.cc || "sin dato")}</span></td>
         <td class="num">${c.movimientos.length}</td>
         <td class="num">${c.vencido > 0 ? `<span class="pill red">${fmtMoney(c.vencido)}</span>` : "&mdash;"}</td>
         <td class="num">${c.porVencer > 0 ? `<span class="pill green">${fmtMoney(c.porVencer)}</span>` : "&mdash;"}</td>
         <td class="num"><strong>${fmtMoney(c.total)}</strong></td>
+        ${cupoCellHtml}
         <td class="row-actions">
           <button class="btn btn-row-pdf" data-key="${escapeHtml(key)}" title="Descargar PDF">${printerIcon()}</button>
           <button class="btn btn-row-share" data-key="${escapeHtml(key)}" title="Compartir PDF">${shareIcon()}</button>
@@ -1622,6 +1695,10 @@ const LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAApIAAAJWCAY
     quickFilterSemana = false;
     quickFilterAlDia = false;
     quickFilterConcentracion = false;
+    quickFilterSobreCupo = false;
+    cupoColumnDetected = !!records.hasCupoColumn;
+    document.getElementById("th-cupo").style.display = cupoColumnDetected ? "" : "none";
+    document.getElementById("filter-group-cupo").style.display = cupoColumnDetected ? "" : "none";
     openRows = new Set();
     document.getElementById("search").value = "";
     document.getElementById("client-search-input").value = "";
@@ -1670,6 +1747,22 @@ const LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAApIAAAJWCAY
   // Eventos
   // ---------------------------------------------------------------------
   function init() {
+    // Ocultar/mostrar los indicadores — recuerda la preferencia entre
+    // sesiones (clave distinta a la del panel de vendedor, ya que ambas
+    // herramientas comparten el mismo dominio de GitHub Pages).
+    const kpiHead = document.getElementById("kpi-section-head");
+    const kpiBody = document.getElementById("kpi-section-body");
+    const kpiCollapsedGuardado = localStorage.getItem("admin_kpi_collapsed") === "1";
+    if (kpiCollapsedGuardado) {
+      kpiHead.classList.add("collapsed");
+      kpiBody.classList.add("collapsed");
+    }
+    document.getElementById("kpi-toggle").addEventListener("click", () => {
+      const ahoraColapsado = kpiBody.classList.toggle("collapsed");
+      kpiHead.classList.toggle("collapsed", ahoraColapsado);
+      localStorage.setItem("admin_kpi_collapsed", ahoraColapsado ? "1" : "0");
+    });
+
     const dropzone = document.getElementById("dropzone");
     const fileInput = document.getElementById("file-input");
 
@@ -1704,6 +1797,11 @@ const LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAApIAAAJWCAY
       quickFilterConcentracion = !quickFilterConcentracion;
       renderTable();
     });
+    document.getElementById("filter-cupo-superado").addEventListener("click", () => {
+      quickFilterSobreCupo = !quickFilterSobreCupo;
+      document.getElementById("filter-cupo-superado").classList.toggle("active", quickFilterSobreCupo);
+      renderTable();
+    });
     document.getElementById("stat-card-vendedor-riesgo").addEventListener("click", () => {
       const nombre = document.getElementById("stat-vendedor-riesgo").textContent;
       if (!nombre || nombre === "—") return;
@@ -1724,6 +1822,11 @@ const LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAApIAAAJWCAY
       quickFilterSemana = false;
       quickFilterAlDia = false;
       quickFilterConcentracion = false;
+      quickFilterSobreCupo = false;
+      cupoColumnDetected = false;
+      document.getElementById("th-cupo").style.display = "none";
+      document.getElementById("filter-group-cupo").style.display = "none";
+      document.getElementById("filter-cupo-superado").classList.remove("active");
       document.getElementById("search").value = "";
       document.getElementById("client-search-input").value = "";
       document.getElementById("dashboard").style.display = "none";
